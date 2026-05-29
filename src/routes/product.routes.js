@@ -1,49 +1,22 @@
-/**
- * Product Routes
- * GET    /api/products       - public
- * GET    /api/products/:id   - public
- * POST   /api/products       - admin only
- * PUT    /api/products/:id   - admin only
- * DELETE /api/products/:id   - admin only
- */
-
 const express = require('express');
 const router = express.Router();
-
-const {
-    getAllProducts, getProductById, createProduct, updateProduct, deleteProduct,
-} = require('../controllers/product.controller');
-
+const { getAllProducts, getProductById, createProduct, updateProduct, deleteProduct } = require('../controllers/product.controller');
 const { authenticate, authorize } = require('../middleware/auth');
-const { validate } = require('../middleware/validate');
-const { productSchema, updateProductSchema } = require('../utils/schemas');
+const upload = require('../middleware/multer');
 
-// Public routes
+const parseFormDataNumbers = (req, res, next) => {
+    if (req.body) {
+        if (req.body.price !== undefined && req.body.price !== '') req.body.price = parseFloat(req.body.price);
+        if (req.body.stock !== undefined && req.body.stock !== '') req.body.stock = parseInt(req.body.stock, 10);
+    }
+    next();
+};
+
 router.get('/', getAllProducts);
 router.get('/:id', getProductById);
 
-// Admin only routes
-router.post(
-    '/',
-    authenticate,
-    authorize('admin'),
-    validate(productSchema),
-    createProduct
-);
-
-router.put(
-    '/:id',
-    authenticate,
-    authorize('admin'),
-    validate(updateProductSchema),
-    updateProduct
-);
-
-router.delete(
-    '/:id',
-    authenticate,
-    authorize('admin'),
-    deleteProduct
-);
+router.post('/', authenticate, authorize('admin'), upload.single('image'), parseFormDataNumbers, createProduct);
+router.put('/:id', authenticate, authorize('admin'), upload.single('image'), parseFormDataNumbers, updateProduct);
+router.delete('/:id', authenticate, authorize('admin'), deleteProduct);
 
 module.exports = router;
