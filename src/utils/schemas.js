@@ -81,7 +81,7 @@ const createOrderSchema = Joi.object({
 });
 
 const updateOrderStatusSchema = Joi.object({
-    status: Joi.string().valid('pending', 'diproses', 'dikirim', 'selesai').required().messages({
+    status: Joi.string().valid('pending', 'diproses', 'dikirim', 'selesai', 'dibatalkan').required().messages({
         'any.only': 'Status harus salah satu dari: pending, diproses, dikirim, selesai',
         'any.required': 'Status wajib diisi',
     }),
