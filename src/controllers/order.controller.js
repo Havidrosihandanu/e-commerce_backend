@@ -139,7 +139,7 @@ const updateOrderStatus = async (req, res, next) => {
             return res.status(404).json({ message: 'Order tidak ditemukan' });
         }
 
-        // PERBAIKAN: Beri akses bagi Customer untuk membatalkan pesanan miliknya
+        // PERBAIKAN: Beri akses penuh ke Admin untuk mengubah status apapun
         if (req.user.role === 'customer') {
             if (order.userId !== req.user.id) {
                 return res.status(403).json({ message: 'Akses ditolak' });
@@ -151,6 +151,7 @@ const updateOrderStatus = async (req, res, next) => {
                 return res.status(400).json({ message: 'Hanya pesanan pending yang bisa dibatalkan' });
             }
         }
+        // Jika req.user.role adalah 'admin', dia akan melewati if di atas dan langsung update!
 
         const updated = await prisma.order.update({
             where: { id },
