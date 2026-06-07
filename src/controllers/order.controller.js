@@ -9,16 +9,11 @@
 
 const prisma = require('../prisma/client');
 
-/**
- * POST /api/orders
- * Checkout seluruh item di cart menjadi satu order
- */
 const createOrder = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const { shipping_address } = req.body;
 
-        // Ambil semua item cart
         const cartItems = await prisma.cartItem.findMany({
             where: { userId },
             include: { product: true },
@@ -28,7 +23,6 @@ const createOrder = async (req, res, next) => {
             return res.status(400).json({ message: 'Keranjang belanja kosong' });
         }
 
-        // Validasi stok semua item
         for (const item of cartItems) {
             if (item.product.stock < item.qty) {
                 return res.status(400).json({
@@ -37,15 +31,12 @@ const createOrder = async (req, res, next) => {
             }
         }
 
-        // Hitung total harga
         const totalPrice = cartItems.reduce(
             (sum, item) => sum + parseFloat(item.product.price) * item.qty,
             0
         );
 
-        // Buat order dan order items dalam satu transaksi
         const order = await prisma.$transaction(async (tx) => {
-            // 1. Buat order
             const newOrder = await tx.order.create({
                 data: {
                     userId,
@@ -62,7 +53,6 @@ const createOrder = async (req, res, next) => {
                 },
             });
 
-            // 2. Kurangi stok setiap produk
             for (const item of cartItems) {
                 await tx.product.update({
                     where: { id: item.productId },
@@ -70,9 +60,7 @@ const createOrder = async (req, res, next) => {
                 });
             }
 
-            // 3. Kosongkan cart user
             await tx.cartItem.deleteMany({ where: { userId } });
-
             return newOrder;
         });
 
@@ -87,10 +75,6 @@ const createOrder = async (req, res, next) => {
     }
 };
 
-/**
- * GET /api/orders/my
- * Riwayat pesanan milik customer yang login
- */
 const getMyOrders = async (req, res, next) => {
     try {
         const orders = await prisma.order.findMany({
@@ -105,10 +89,6 @@ const getMyOrders = async (req, res, next) => {
     }
 };
 
-/**
- * GET /api/orders/:id
- * Detail satu order (milik user atau admin)
- */
 const getOrderById = async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
@@ -122,21 +102,17 @@ const getOrderById = async (req, res, next) => {
             return res.status(404).json({ message: 'Order tidak ditemukan' });
         }
 
-        // Customer hanya boleh lihat order miliknya
         if (req.user.role === 'customer' && order.userId !== req.user.id) {
             return res.status(403).json({ message: 'Forbidden: Bukan order Anda' });
         }
 
-        res.json({ order });
+        // PERBAIKAN: Kirim order secara langsung agar terbaca oleh Frontend Modal Detail
+        res.json(order);
     } catch (error) {
         next(error);
     }
 };
 
-/**
- * GET /api/orders
- * Semua pesanan (admin only)
- */
 const getAllOrders = async (req, res, next) => {
     try {
         const orders = await prisma.order.findMany({
@@ -153,10 +129,6 @@ const getAllOrders = async (req, res, next) => {
     }
 };
 
-/**
- * PATCH /api/orders/:id/status
- * Update status order (admin only)
- */
 const updateOrderStatus = async (req, res, next) => {
     try {
         const id = parseInt(req.params.id);
@@ -165,6 +137,19 @@ const updateOrderStatus = async (req, res, next) => {
         const order = await prisma.order.findUnique({ where: { id } });
         if (!order) {
             return res.status(404).json({ message: 'Order tidak ditemukan' });
+        }
+
+        // PERBAIKAN: Beri akses bagi Customer untuk membatalkan pesanan miliknya
+        if (req.user.role === 'customer') {
+            if (order.userId !== req.user.id) {
+                return res.status(403).json({ message: 'Akses ditolak' });
+            }
+            if (status !== 'dibatalkan') {
+                return res.status(403).json({ message: 'Customer hanya dapat membatalkan pesanan' });
+            }
+            if (order.status !== 'pending') {
+                return res.status(400).json({ message: 'Hanya pesanan pending yang bisa dibatalkan' });
+            }
         }
 
         const updated = await prisma.order.update({
