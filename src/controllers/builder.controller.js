@@ -45,37 +45,20 @@ const getComponents = async (req, res, next) => {
             grouped[cat] = [];
         }
 
-        // Jika ada cpu_id, filter komponen yang kompatibel
+        // Jika ada cpu_id, kita ambil datanya hanya untuk informasi (tanpa memfilter ketat)
         let cpu = null;
         if (cpu_id) {
             cpu = await findComponent(parseInt(cpu_id));
         }
 
+        // Masukkan SEMUA produk ke dalam kelompoknya tanpa memfilter specs JSON
         for (const product of products) {
-            // Jika ada CPU dipilih, filter Motherboard dan RAM berdasarkan kompatibilitas
-            if (cpu && product.category === 'Motherboard') {
-                const cpuSocket = cpu.specs?.socket;
-                const mbSocket = product.specs?.socket;
-                if (cpuSocket && mbSocket && cpuSocket !== mbSocket) {
-                    continue; // Skip motherboard yang tidak kompatibel
-                }
-            }
-
-            if (cpu && product.category === 'RAM') {
-                const cpuSupportedRam = cpu.specs?.supported_ram;
-                const ramType = product.specs?.type;
-                if (cpuSupportedRam && ramType && !cpuSupportedRam.includes(ramType)) {
-                    continue; // Skip RAM yang tidak didukung CPU
-                }
-            }
-
             grouped[product.category].push(product);
         }
 
         res.json({
             components: grouped,
-            // Jika ada cpu_id, sertakan info filter
-            filtered_by_cpu: cpu ? { id: cpu.id, name: cpu.name, socket: cpu.specs?.socket } : null,
+            filtered_by_cpu: cpu ? { id: cpu.id, name: cpu.name } : null,
         });
     } catch (error) {
         next(error);
