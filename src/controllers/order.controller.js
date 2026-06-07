@@ -106,7 +106,6 @@ const getOrderById = async (req, res, next) => {
             return res.status(403).json({ message: 'Forbidden: Bukan order Anda' });
         }
 
-        // PERBAIKAN: Kirim order secara langsung agar terbaca oleh Frontend Modal Detail
         res.json(order);
     } catch (error) {
         next(error);
@@ -134,12 +133,16 @@ const updateOrderStatus = async (req, res, next) => {
         const id = parseInt(req.params.id);
         const { status } = req.body;
 
-        const order = await prisma.order.findUnique({ where: { id } });
+        // PERBAIKAN 1: Ambil data order beserta daftar barangnya (orderItems)
+        const order = await prisma.order.findUnique({ 
+            where: { id },
+            include: { orderItems: true } // Wajib ada agar kita tahu jumlah qty yang harus dikembalikan
+        });
+        
         if (!order) {
             return res.status(404).json({ message: 'Order tidak ditemukan' });
         }
 
-        // PERBAIKAN: Beri akses penuh ke Admin untuk mengubah status apapun
         if (req.user.role === 'customer') {
             if (order.userId !== req.user.id) {
                 return res.status(403).json({ message: 'Akses ditolak' });
@@ -151,16 +154,41 @@ const updateOrderStatus = async (req, res, next) => {
                 return res.status(400).json({ message: 'Hanya pesanan pending yang bisa dibatalkan' });
             }
         }
-        // Jika req.user.role adalah 'admin', dia akan melewati if di atas dan langsung update!
 
-        const updated = await prisma.order.update({
-            where: { id },
-            data: { status },
-        });
+        // PERBAIKAN 2: Cek apakah aksi ini adalah pembatalan dari status yang belum batal
+        const isCancelling = status === 'dibatalkan' && order.status !== 'dibatalkan';
+
+        let updatedOrder;
+
+        if (isCancelling) {
+            // Gunakan transaction agar jika gagal salah satu, semua dibatalkan
+            updatedOrder = await prisma.$transaction(async (tx) => {
+                
+                // A. Loop setiap barang di dalam pesanan tersebut dan kembalikan stoknya
+                for (const item of order.orderItems) {
+                    await tx.product.updateMany({
+                        where: { name: item.productName },
+                        data: { stock: { increment: item.qty } }
+                    });
+                }
+
+                // B. Update status order menjadi dibatalkan
+                return await tx.order.update({
+                    where: { id },
+                    data: { status },
+                });
+            });
+        } else {
+            // Jika sekadar update status biasa (misal: 'pending' -> 'diproses')
+            updatedOrder = await prisma.order.update({
+                where: { id },
+                data: { status },
+            });
+        }
 
         res.json({
             message: 'Status order berhasil diupdate',
-            order: { id: updated.id, status: updated.status },
+            order: { id: updatedOrder.id, status: updatedOrder.status },
         });
     } catch (error) {
         next(error);
