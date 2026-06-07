@@ -4,7 +4,7 @@
  * GET    /api/orders/my           - customer: riwayat pesanan
  * GET    /api/orders/:id          - customer/admin: detail order
  * GET    /api/orders              - admin only: semua pesanan
- * PATCH  /api/orders/:id/status   - admin only: update status
+ * PATCH  /api/orders/:id/status   - shared: admin update status, customer batalkan pesanan
  */
 
 const express = require('express');
@@ -30,6 +30,9 @@ router.get('/', authorize('admin'), getAllOrders);
 
 // Shared: customer bisa lihat ordernya, admin bisa lihat semua
 router.get('/:id', getOrderById);
-router.patch('/:id/status', authorize('admin'), validate(updateOrderStatusSchema), updateOrderStatus);
+
+// PERBAIKAN: Menghapus authorize('admin') agar Customer bisa membatalkan pesanan.
+// Keamanan sudah dihandle otomatis di dalam fungsi updateOrderStatus di controller.
+router.patch('/:id/status', validate(updateOrderStatusSchema), updateOrderStatus);
 
 module.exports = router;
